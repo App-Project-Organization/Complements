@@ -3,11 +3,15 @@ kind: Deployment
 metadata:
   name: rabbitmq-deployment
   namespace: common
+  labels:
+    deploy: rabbitmq
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: rabbitmq
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
