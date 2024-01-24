@@ -7,14 +7,14 @@ data:
   default.conf: |
     server {
       listen 80;
-      server_name localhost;
+      server_name prd.sytes.net;
 
       location / {
         root /usr/share/nginx/html;
         index index.html index.htm;
       }
 
-      location /rabbitmq {
+      location /config {
         proxy_pass http://configserver-service.common.svc.cluster.local:8888/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
