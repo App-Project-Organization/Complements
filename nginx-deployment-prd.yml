@@ -15,11 +15,15 @@ data:
       }
 
       location /config {
-        proxy_pass http://configserver-service.common.svc.cluster.local:8888/;
+        proxy_pass http://configserver-service.common.svc.cluster.local/;
       }
 
       location /eureka {
         proxy_pass http://eureka-service.common.svc.cluster.local:8761/;
+      }
+      
+      location /rabbitmq {
+        proxy_pass http://rabitmq-service.common.svc.cluster.local:15672/;
       }
     }
 ---
