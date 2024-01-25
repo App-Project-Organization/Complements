@@ -1,0 +1,29 @@
+name: Deploy Config Server Prd
+
+on:
+  push:
+    branches: [ "redis" ]
+  pull_request:
+    branches: [ "redis" ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Set up kubectl
+      uses: azure/k8s-set-context@v1
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBE_CONFIG }}
+        
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f redis-deployment-prd.yml --validate=false
