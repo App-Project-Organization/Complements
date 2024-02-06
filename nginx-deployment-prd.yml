@@ -3,6 +3,7 @@ apiVersion: v1
 kind: ConfigMap  
 metadata:  
   name: app-rp-config-cm
+  namespace: common
 data:  
   nginx.conf: |
     user www-data;
@@ -30,7 +31,7 @@ data:
     server {
       listen 80;
       server_name _;
-      location / {
+      location /jenkins {
         proxy_pass http://52.226.137.133;
         proxy_http_version 1.1;
         proxy_set_header Connection "Keep-Alive";
@@ -43,6 +44,7 @@ apiVersion: apps/v1
 kind: Deployment  
 metadata:  
   name: app-reverse-proxy
+  namespace: common
   labels:
     app: app-reverse-proxy
     category: reverse-proxy
@@ -93,7 +95,7 @@ apiVersion: v1
 kind: Service  
 metadata:  
   name: app-reverse-proxy
-  namespace: default
+  namespace: common
 spec:  
   ports:
   - name: http
