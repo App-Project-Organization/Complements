@@ -1,17 +1,18 @@
----
-apiVersion: v1  
-kind: ConfigMap  
-metadata:  
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: app-rp-config-cm
   namespace: common
-data:  
+data:
   nginx.conf: |
     user www-data;
     worker_processes auto;
     pid /run/nginx.pid;
+    
     events {
         worker_connections 1024;
     }
+    
     http {
         sendfile on;
         tcp_nopush on;
@@ -27,33 +28,88 @@ data:
         gzip_disable "msie6";
         include /etc/nginx/conf.d/app.conf;
     }
+
   app.conf: |
+    upstream jenkins {
+      keepalive 32; # keepalive connections
+      server 52.226.137.133; # jenkins ip and port
+    }
+    
+    # Required for Jenkins websocket agents
+    map $http_upgrade $connection_upgrade {
+      default upgrade;
+      '' close;
+    }
+    
     server {
-      listen 80;
-      server_name _;
+      listen          80;       # Listen on port 80 for IPv4 requests
+      #server_name     jenkins.example.com;  # replace 'jenkins.example.com' with your server domain name
       
-      location / {
-        root /usr/share/nginx/html;
-        index index.html index.htm;
+      # this is the jenkins web root directory
+      # (mentioned in the output of "systemctl cat jenkins")
+      root            /var/run/jenkins/war/;
+      
+      access_log      /var/log/nginx/jenkins.access.log;
+      error_log       /var/log/nginx/jenkins.error.log;
+      
+      # pass through headers from Jenkins that Nginx considers invalid
+      ignore_invalid_headers off;
+      
+      location ~ "^/static/[0-9a-fA-F]{8}\/(.*)" {
+        # rewrite all static files into requests to the root
+        # E.g /static/12345678/css/something.css will become /css/something.css
+        rewrite "^/static/[0-9a-fA-F]{8}\/(.*)" /$1 last;
       }
+      
+      location /userContent {
+        # have nginx handle all the static requests to userContent folder
+        # note : This is the $JENKINS_HOME dir
+        root /var/lib/jenkins/;
+        if (!-f $request_filename){
+          # this file does not exist, might be a directory or a /**view** url
+          rewrite (.*) /$1 last;
+          break;
+        }
+        sendfile on;
+      }
+      
       location /jenkins {
-        proxy_pass http://172.171.49.47/login?from=%2F;
-        proxy_http_version 1.1;
-        proxy_set_header Connection "Keep-Alive";
-        proxy_set_header Proxy-Connection "Keep-Alive";
-        proxy_redirect off;
+          sendfile off;
+          proxy_pass         http://52.226.137.133/login?from=%2F;
+          proxy_redirect     default;
+          proxy_http_version 1.1;
+          
+          # Required for Jenkins websocket agents
+          proxy_set_header   Connection        $connection_upgrade;
+          proxy_set_header   Upgrade           $http_upgrade;
+          
+          proxy_set_header   Host              $http_host;
+          proxy_set_header   X-Real-IP         $remote_addr;
+          proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+          proxy_set_header   X-Forwarded-Proto $scheme;
+          proxy_max_temp_file_size 0;
+          
+          #this is the maximum upload size
+          client_max_body_size       10m;
+          client_body_buffer_size    128k;
+          
+          proxy_connect_timeout      90;
+          proxy_send_timeout         90;
+          proxy_read_timeout         90;
+          proxy_request_buffering    off; # Required for HTTP CLI commands
       }
     }
+
 ---
-apiVersion: apps/v1  
-kind: Deployment  
-metadata:  
+apiVersion: apps/v1
+kind: Deployment
+metadata:
   name: app-reverse-proxy
   namespace: common
   labels:
     app: app-reverse-proxy
     category: reverse-proxy
-spec:  
+spec:
   replicas: 1
   selector:
     matchLabels:
@@ -86,22 +142,17 @@ spec:
           subPath: app.conf
           readOnly: true
       volumes:
-      # https://medium.com/swlh/quick-fix-mounting-a-configmap-to-an-existing-volume-in-kubernetes-using-rancher-d01c472a10ad
-      - configMap:
+      - name: app-rp-config-cm-vol
+        configMap:
           name: app-rp-config-cm
-          items:
-          - key: nginx.conf
-            path: nginx.conf
-          - key: app.conf
-            path: app.conf
-        name: app-rp-config-cm-vol
+
 ---
-apiVersion: v1  
-kind: Service  
-metadata:  
+apiVersion: v1
+kind: Service
+metadata:
   name: app-reverse-proxy
   namespace: common
-spec:  
+spec:
   ports:
   - name: http
     targetPort: 80
