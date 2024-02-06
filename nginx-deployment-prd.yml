@@ -30,7 +30,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nginx-proxy
-  namespace: common
 spec:
   replicas: 1
   selector:
@@ -43,16 +42,15 @@ spec:
     spec:
       containers:
       - name: nginx-proxy
-        image: jwilder/nginx-proxy
-        ports:
-        - containerPort: 80
+        image: nginxproxy/nginx-proxy:1.4.0-75-g3d61f47
         volumeMounts:
-        - name: nginx-config-volume
-          mountPath: /etc/nginx/conf.d
+        - name: docker-socket-volume
+          mountPath: /tmp/docker.sock
+          readOnly: true
       volumes:
-      - name: nginx-config-volume
-        configMap:
-          name: nginx-config
+      - name: docker-socket-volume
+        hostPath:
+          path: /var/run/docker.sock
 ---
 apiVersion: v1
 kind: Service
