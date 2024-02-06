@@ -31,7 +31,7 @@ data:
       listen 80;
       server_name _;
       location / {
-        proxy_pass http://jenkins.common.svc.cluster.local;
+        proxy_pass http://52.226.137.133;
         proxy_http_version 1.1;
         proxy_set_header Connection "Keep-Alive";
         proxy_set_header Proxy-Connection "Keep-Alive";
@@ -102,3 +102,4 @@ spec:
   selector:
     app: app-reverse-proxy
     category: reverse-proxy
+  type: LoadBalancer
