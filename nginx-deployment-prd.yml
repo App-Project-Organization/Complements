@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: nginx-config
-  nacespace: common
+  namespace: common
 data:
   default.conf: |
     server {
@@ -31,7 +31,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nginx-proxy
-  nacespace: common
+  namespace: common
 spec:
   replicas: 1
   selector:
@@ -61,7 +61,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: nginx-service
-  nacespace: common
+  namespace: common
 spec:
   selector:
     app: nginx-proxy
