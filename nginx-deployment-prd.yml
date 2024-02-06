@@ -7,105 +7,61 @@ data:
   default.conf: |
     server {
       listen 80;
-      server_name prd.sytes.net;
+      server_name _;
 
       location / {
         root /usr/share/nginx/html;
         index index.html index.htm;
       }
+    }
+  rabbitmq.conf: |
+    server {
+      listen 80;
 
-      location /config {
-        proxy_pass http://configserver-service.common.svc.cluster.local/;
+      location / {
+        root /usr/share/nginx/html;
+        index index.html index.htm;
       }
-
-      location /eureka {
-        proxy_pass http://eureka-service.common.svc.cluster.local:8761/;
-      }
-      
-      location /rabbitmq {
+         
+      location / {
         proxy_pass http://rabitmq-service.common.svc.cluster.local:15672/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
       }
-    }
-  nginx.conf: |
-   user  nginx;
-    worker_processes  auto;
-    
-    error_log  /var/log/nginx/error.log notice;
-    pid        /var/run/nginx.pid;
-    
-    events {
-        worker_connections  1024;
-    }
-    
-    http {
-        include       /etc/nginx/mime.types;
-        default_type  application/octet-stream;
-        client_max_body_size 100M;
-    
-        log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
-                          '$status $body_bytes_sent "$http_referer" '
-                          '"$http_user_agent" "$http_x_forwarded_for"';
-    
-        access_log  /var/log/nginx/access.log  main;
-    
-        sendfile        on;
-    
-        keepalive_timeout  65;
-    
-        include /etc/nginx/conf.d/*.conf;
-    }
-    
-    stream {
-      log_format basic '$remote_addr [$time_local] '
-                       '$protocol $status $bytes_sent $bytes_received '
-                       '$session_time';
-    
-      access_log  /var/log/nginx/nginx-access.log basic buffer=32k;
-    
-      server {
-        listen 5672;
-        proxy_pass rabitmq-service.common.svc.cluster.local:5672;
-      }
-    }
+    } 
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx-deployment
-  namespace: common
-  labels:
-    deploy: nginx
+  name: nginx-proxy
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nginx
+      app: nginx-proxy
   template:
     metadata:
       labels:
-        app: nginx
+        app: nginx-proxy
     spec:
       containers:
-      - name: nginx
-        image: nginx:latest
+      - name: nginx-proxy
+        image: jwilder/nginx-proxy
         ports:
         - containerPort: 80
         volumeMounts:
         - name: nginx-config
           mountPath: /etc/nginx/conf.d
-      volumes:
-      - name: nginx-config
-        configMap:
-          name: nginx-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: nginx-service
-  namespace: common
+  name: nginx-proxy
 spec:
   selector:
-    app: nginx
+    app: nginx-proxy
   ports:
     - protocol: TCP
       port: 80

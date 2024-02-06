@@ -1,10 +1,8 @@
 name: Deploy Config Server Prd
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch: # Este es el único disparador que permite ejecutar manualmente el flujo
+
 
 jobs:
 
