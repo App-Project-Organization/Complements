@@ -1,4 +1,4 @@
-name: Deploy Config Server Prd
+name: Deploy Redis Prd
 
 on:
   workflow_dispatch: # Este es el único disparador que permite ejecutar manualmente el flujo
