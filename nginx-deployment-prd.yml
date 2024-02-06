@@ -12,21 +12,53 @@ data:
         root /usr/share/nginx/html;
         index index.html index.htm;
       }
-    }
-  rabbitmq.conf: |
-    server {
-      listen 80;
-         
-      location / {
-        proxy_pass http://rabbitmq-service.common.svc.cluster.local:15672/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+      location /jenkins {
+        proxy_pass http://jenkins.common.svc.cluster.local/;
       }
-    } 
----
+    }
+    
+  nginx.conf: |
+    user  nginx;
+    worker_processes  auto;
 
+    error_log  /var/log/nginx/error.log notice;
+    pid        /var/run/nginx.pid;
+
+    events {
+        worker_connections  1024;
+    }
+
+    http {
+        include       /etc/nginx/mime.types;
+        default_type  application/octet-stream;
+        client_max_body_size 100M;
+
+        log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                          '$status $body_bytes_sent "$http_referer" '
+                          '"$http_user_agent" "$http_x_forwarded_for"';
+
+        access_log  /var/log/nginx/access.log  main;
+
+        sendfile        on;
+
+        keepalive_timeout  65;
+
+        include /etc/nginx/conf.d/*.conf;
+    }
+
+    stream {
+      log_format basic '$remote_addr [$time_local] '
+                       '$protocol $status $bytes_sent $bytes_received '
+                       '$session_time';
+
+      access_log  /var/log/nginx/nginx-access.log basic buffer=32k;
+
+      server {
+        listen 5672;
+        proxy_pass uat-rabbitmq.k8rabbit.svc.cluster.local:5672;
+      }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -49,14 +81,13 @@ spec:
             - containerPort: 80
           volumeMounts:
             - name: nginx-config-volume
-              mountPath: /etc/nginx/conf.d
+              mountPath: /etc/nginx
+              readOnly: true
       volumes:
         - name: nginx-config-volume
           configMap:
             name: nginx-config
-
 ---
-
 apiVersion: v1
 kind: Service
 metadata:
