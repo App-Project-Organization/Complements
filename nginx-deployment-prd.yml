@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: nginx-config
-  namespace: common
+  nacespace: common
 data:
   default.conf: |
     server {
@@ -26,10 +26,12 @@ data:
       }
     } 
 ---
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nginx-proxy
+  nacespace: common
 spec:
   replicas: 1
   selector:
@@ -41,22 +43,25 @@ spec:
         app: nginx-proxy
     spec:
       containers:
-      - name: nginx-proxy
-        image: nginxproxy/nginx-proxy:1.4.0-75-g3d61f47
-        volumeMounts:
-        - name: docker-socket-volume
-          mountPath: /tmp/docker.sock
-          readOnly: true
+        - name: nginx
+          image: nginx:latest
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-config-volume
+              mountPath: /etc/nginx/conf.d
       volumes:
-      - name: docker-socket-volume
-        hostPath:
-          path: /var/run/docker.sock
+        - name: nginx-config-volume
+          configMap:
+            name: nginx-config
+
 ---
+
 apiVersion: v1
 kind: Service
 metadata:
-  name: nginx-proxy
-  namespace: common
+  name: nginx-service
+  nacespace: common
 spec:
   selector:
     app: nginx-proxy
