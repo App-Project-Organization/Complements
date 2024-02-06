@@ -1,103 +1,104 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: nginx-config
-  namespace: common
-data:
-  default.conf: |
+---
+apiVersion: v1  
+kind: ConfigMap  
+metadata:  
+  name: app-rp-config-cm
+data:  
+  nginx.conf: |
+    user www-data;
+    worker_processes auto;
+    pid /run/nginx.pid;
+    events {
+        worker_connections 1024;
+    }
+    http {
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        types_hash_max_size 2048;
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+        ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+        ssl_prefer_server_ciphers on;
+        error_log /var/log/nginx/error.log;
+        gzip on;
+        gzip_disable "msie6";
+        include /etc/nginx/conf.d/app.conf;
+    }
+  app.conf: |
     server {
       listen 80;
-      
+      server_name _;
       location / {
-        root /usr/share/nginx/html;
-        index index.html index.htm;
-      }
-      location /jenkins {
-        proxy_pass http://jenkins.common.svc.cluster.local/;
-      }
-    }
-    
-  nginx.conf: |
-    user  nginx;
-    worker_processes  auto;
-
-    error_log  /var/log/nginx/error.log notice;
-    pid        /var/run/nginx.pid;
-
-    events {
-        worker_connections  1024;
-    }
-
-    http {
-        include       /etc/nginx/mime.types;
-        default_type  application/octet-stream;
-        client_max_body_size 100M;
-
-        log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
-                          '$status $body_bytes_sent "$http_referer" '
-                          '"$http_user_agent" "$http_x_forwarded_for"';
-
-        access_log  /var/log/nginx/access.log  main;
-
-        sendfile        on;
-
-        keepalive_timeout  65;
-
-        include /etc/nginx/conf.d/*.conf;
-    }
-
-    stream {
-      log_format basic '$remote_addr [$time_local] '
-                       '$protocol $status $bytes_sent $bytes_received '
-                       '$session_time';
-
-      access_log  /var/log/nginx/nginx-access.log basic buffer=32k;
-
-      server {
-        listen 5672;
-        proxy_pass uat-rabbitmq.k8rabbit.svc.cluster.local:5672;
+        proxy_pass http://jenkins.common.svc.cluster.local;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "Keep-Alive";
+        proxy_set_header Proxy-Connection "Keep-Alive";
+        proxy_redirect off;
       }
     }
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: nginx-proxy
-  namespace: common
-spec:
+apiVersion: apps/v1  
+kind: Deployment  
+metadata:  
+  name: app-reverse-proxy
+  labels:
+    app: app-reverse-proxy
+    category: reverse-proxy
+spec:  
   replicas: 1
   selector:
     matchLabels:
-      app: nginx-proxy
+      app: app-reverse-proxy
   template:
     metadata:
       labels:
-        app: nginx-proxy
+        app: app-reverse-proxy
+        category: reverse-proxy
     spec:
       containers:
-        - name: nginx
-          image: nginx:latest
-          ports:
-            - containerPort: 80
-          volumeMounts:
-            - name: nginx-config-volume
-              mountPath: /etc/nginx
-              readOnly: true
+      - name: app-reverse-proxy
+        image: nginx
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 100m
+            memory: 50Mi
+          limits:
+            cpu: 100m
+            memory: 50Mi
+        volumeMounts:
+        - name: app-rp-config-cm-vol
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+          readOnly: true
+        - name: app-rp-config-cm-vol
+          mountPath: /etc/nginx/conf.d/app.conf
+          subPath: app.conf
+          readOnly: true
       volumes:
-        - name: nginx-config-volume
-          configMap:
-            name: nginx-config
+      # https://medium.com/swlh/quick-fix-mounting-a-configmap-to-an-existing-volume-in-kubernetes-using-rancher-d01c472a10ad
+      - configMap:
+          name: app-rp-config-cm
+          items:
+          - key: nginx.conf
+            path: nginx.conf
+          - key: app.conf
+            path: app.conf
+        name: app-rp-config-cm-vol
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: nginx-service
-  namespace: common
-spec:
-  selector:
-    app: nginx-proxy
+apiVersion: v1  
+kind: Service  
+metadata:  
+  name: app-reverse-proxy
+  namespace: default
+spec:  
   ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 80
-  type: LoadBalancer
+  - name: http
+    targetPort: 80
+    port: 80
+  selector:
+    app: app-reverse-proxy
+    category: reverse-proxy
